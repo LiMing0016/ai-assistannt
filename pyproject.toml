@@ -1,0 +1,25 @@
+[project]
+name = "ai-assistant"
+version = "0.1.0"
+description = "Independent Python agent orchestration service for personalenglishai"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "httpx",
+    "langchain-core",
+    "langgraph",
+    "pydantic",
+    "pydantic-settings",
+    "redis",
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-p", "no:cacheprovider"]
