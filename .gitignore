@@ -12,3 +12,5 @@ htmlcov/
 dist/
 build/
 .env
+tmp/
+pytest-cache-files-*/
