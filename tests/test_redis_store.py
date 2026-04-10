@@ -48,3 +48,15 @@ def test_redis_store_can_save_and_load_task_state() -> None:
     assert loaded is not None
     assert loaded.task_id == "task-1"
     assert loaded.status == "queued"
+
+
+def test_redis_store_allows_disabled_mode_without_client() -> None:
+    store = RedisStateStore(redis_url="")
+
+    assert store.is_enabled() is False
+    store.append_conversation_messages(
+        "conv-1",
+        [ConversationMessage(role="user", content="Hello")],
+    )
+    assert store.load_conversation_state("conv-1").messages == []
+    assert store.load_task_state("task-1") is None

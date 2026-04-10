@@ -8,13 +8,15 @@ from app.state.models import ConversationMessage, ConversationState, TaskState
 class RedisStateStore:
     def __init__(self, redis_url: str, client: Redis | None = None) -> None:
         self._redis_url = redis_url
-        self._client = client or Redis.from_url(redis_url, decode_responses=True)
+        self._client = client
+        if self._client is None and redis_url:
+            self._client = Redis.from_url(redis_url, decode_responses=True)
 
     def is_enabled(self) -> bool:
-        return bool(self._redis_url)
+        return bool(self._redis_url and self._client is not None)
 
     @property
-    def client(self) -> Redis:
+    def client(self) -> Redis | None:
         return self._client
 
     def append_conversation_messages(
@@ -22,22 +24,30 @@ class RedisStateStore:
         conversation_id: str,
         messages: list[ConversationMessage],
     ) -> None:
+        if not self.is_enabled():
+            return
         key = f"ai-assistant:conversation:{conversation_id}"
         payloads = [message.model_dump_json() for message in messages]
         if payloads:
             self._client.rpush(key, *payloads)
 
     def load_conversation_state(self, conversation_id: str) -> ConversationState:
+        if not self.is_enabled():
+            return ConversationState(conversation_id=conversation_id, messages=[])
         key = f"ai-assistant:conversation:{conversation_id}"
         values = self._client.lrange(key, 0, -1)
         messages = [ConversationMessage.model_validate_json(value) for value in values]
         return ConversationState(conversation_id=conversation_id, messages=messages)
 
     def save_task_state(self, task_state: TaskState) -> None:
+        if not self.is_enabled():
+            return
         key = f"ai-assistant:task:{task_state.task_id}"
         self._client.set(key, task_state.model_dump_json())
 
     def load_task_state(self, task_id: str) -> TaskState | None:
+        if not self.is_enabled():
+            return None
         key = f"ai-assistant:task:{task_id}"
         value = self._client.get(key)
         if not value:

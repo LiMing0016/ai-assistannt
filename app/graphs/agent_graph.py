@@ -1,3 +1,4 @@
+import asyncio
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -41,7 +42,8 @@ class AgentGraphService:
     async def execute(self, message: str) -> dict[str, object]:
         result = await self._graph.ainvoke({"message": message, "reply": "", "tool": ""})
         if self._state_store.is_enabled():
-            self._state_store.append_conversation_messages(
+            await asyncio.to_thread(
+                self._state_store.append_conversation_messages,
                 "default",
                 [ConversationMessage(role="user", content=message)],
             )
