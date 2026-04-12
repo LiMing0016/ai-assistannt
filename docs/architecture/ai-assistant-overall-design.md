@@ -1,263 +1,307 @@
-# AI Assistant Agent 编排层总体设计
+# AI Assistant 领域型 Agent 平台总体设计
 
-## 1. 目标与边界
+## 1. 项目定位
 
-本项目用于在独立工程 `ai-assistant` 中建设 AI Agent 编排层，为 `personalenglishai` 提供智能增强能力，同时避免直接侵入现有 Java 后端主业务逻辑。
+`ai-assistant` 不再仅仅定义为一个英语问答助手，而是定义为：
 
-目标能力包括：
+`一个以英语学科为起点、后续可扩展到其他学科的领域型 Agent 平台`
 
-- 英语知识讲解
-- 润色
-- 翻译
-- 改写
-- 知识图谱构建
-- 后续扩展的用户画像、推荐、分析、通知等能力
+它的职责不是简单返回一次回答，而是围绕学习场景持续完成：
 
-总体原则：
-
-- 业务规则归 `Java 后端`
-- 智能编排归 `Python ai-assistant`
-- 两边通过稳定接口解耦
-- 支持并行开发
-- 先满足当前核心能力，再为未来复杂工作流预留扩展空间
+- 用户问题理解
+- 能力调用与工作流编排
+- 用户学习特征提取
+- 用户能力画像更新
+- 多轮对话记忆与状态管理
+- 后续跨学科扩展
 
 ---
 
-## 2. 总体架构
+## 2. 总体边界
 
-### 2.1 职责划分
+### 2.1 Java 后端 `personalenglishai`
 
-#### personalenglishai（Java 后端）
-
-负责：
+继续负责：
 
 - 用户体系
 - 权限认证
-- 业务规则
-- 学习数据
-- 作文、背词等既有业务逻辑
+- 学习业务规则
+- 作文、背词等既有业务能力
 - 数据库存储
 - 业务事实来源
 
-#### ai-assistant（Python 编排层）
+### 2.2 Python 平台 `ai-assistant`
 
 负责：
 
-- Agent 编排
-- 工具路由
-- 多步工作流控制
-- 第三方 AI 库接入
-- LangGraph 流程执行
-- 会话状态与任务状态协调
+- Agent 平台内核
+- 模型 Provider 接入
+- 工具注册与调用
+- 领域 Agent 编排
+- 用户理解与能力画像
+- 记忆与运行状态管理
 - LangSmith 追踪与评测
 
-### 2.2 总体架构图
+结论：
+
+`Java 负责业务主系统，Python 负责智能平台层。`
+
+---
+
+## 3. 平台目标
+
+### 3.1 当前目标
+
+先完成一个可运行的平台最小内核，用于承载英语领域 Agent。
+
+### 3.2 中期目标
+
+形成“英语学习型 Agent 平台”闭环，支持讲解、润色、翻译、改写、能力画像更新等核心场景。
+
+### 3.3 长期目标
+
+在平台内核稳定后，将同一套平台能力扩展到其他学科。
+
+---
+
+## 4. 总体架构
 
 ```mermaid
 flowchart LR
-    FE["Web / App 前端"] --> JAVA["personalenglishai Java 后端<br/>认证 / 用户 / 业务规则 / 数据库"]
-    JAVA --> AGENT["ai-assistant Python<br/>FastAPI + LangGraph"]
+    FE["Web / App 前端"] --> JAVA["personalenglishai Java 后端"]
+    JAVA --> API["ai-assistant API"]
 
-    AGENT --> MODEL["LLM / 第三方 AI 能力"]
-    AGENT --> TOOLS["Tools Adapter<br/>讲解 / 润色 / 翻译 / 改写 / 知识图谱"]
+    API --> PLATFORM["Platform Core<br/>orchestrator / planner / runtime / registry / router"]
+    PLATFORM --> AGENTS["Domain Agents<br/>english / future subjects"]
+    PLATFORM --> TOOLS["Tools<br/>english / shared"]
+    PLATFORM --> PROFILE["Profile<br/>用户理解 / 能力画像"]
+    PLATFORM --> MEMORY["Memory"]
+    PLATFORM --> STATE["State / Redis"]
+    PLATFORM --> PROVIDERS["Providers<br/>Kimi / OpenAI / 阿里"]
+
     TOOLS --> JAVA
-
-    AGENT --> REDIS["Redis<br/>会话状态 / 任务状态 / checkpoint / 缓存"]
-    AGENT --> SMITH["LangSmith<br/>Trace / Eval / Debug"]
+    PROFILE --> JAVA
+    MEMORY --> STATE
+    PLATFORM --> OBS["Observability / LangSmith"]
 ```
 
-### 2.3 一句话结论
+一句话概括：
 
-`personalenglishai` 继续作为主业务后端，`ai-assistant` 作为独立 Python Agent 编排服务，通过工具接口调用业务能力，并利用 Redis 维护运行状态，利用 LangSmith 提供可观测性。
+`ai-assistant` 是一个平台内核，英语只是第一个落地领域。
 
 ---
 
-## 3. 当前阶段设计
+## 5. 目标目录结构
 
-### 3.1 当前阶段目标
-
-当前阶段重点不是构建万能 Agent，而是先把一个稳定可运行的编排层打通，满足以下能力：
-
-- 正确识别用户意图
-- 正确路由到讲解 / 润色 / 翻译 / 改写等工具
-- 保留必要上下文
-- 返回稳定结构化结果
-- 能追踪每一次调用过程
-
-### 3.2 当前阶段核心技术栈
-
-- `Python`
-- `FastAPI`
-- `LangChain`
-- `LangGraph`
-- `LangSmith`
-- `Redis`
-
-### 3.3 ai-assistant 内部模块图
-
-```mermaid
-flowchart TB
-    API["API Layer<br/>FastAPI"] --> GRAPH["Graph Layer<br/>LangGraph Orchestrator"]
-    GRAPH --> ROUTER["Intent Router"]
-    GRAPH --> TOOLS["Tool Adapters"]
-    GRAPH --> STATE["State Layer"]
-    GRAPH --> OBS["Observability"]
-
-    TOOLS --> BIZ["Java Backend APIs"]
-    TOOLS --> MODEL["LLM / External AI"]
-
-    STATE --> REDIS["Redis"]
-    OBS --> SMITH["LangSmith"]
+```text
+app/
+├─ api/                    # FastAPI 路由
+├─ core/                   # 配置、依赖注入、基础常量
+├─ platform/               # 平台内核
+│  ├─ orchestrator/        # 编排执行
+│  ├─ planner/             # 任务拆解与计划
+│  ├─ registry/            # agent/tool/provider 注册中心
+│  ├─ router/              # 意图与流程路由
+│  └─ runtime/             # 运行上下文、trace、checkpoint
+├─ agents/                 # 领域 agent
+│  ├─ english/             # 英语领域 agent
+│  └─ shared/              # 通用 agent 能力
+├─ tools/                  # 工具集合
+│  ├─ english/             # 讲解/翻译/润色/改写/知识图谱
+│  └─ shared/              # 通用工具
+├─ providers/              # 模型供应方适配层
+├─ profile/                # 用户理解与能力画像
+│  ├─ extractor/           # 从对话和行为提取信号
+│  ├─ evaluator/           # 评估用户能力
+│  ├─ updater/             # 更新用户画像
+│  └─ models.py            # 画像数据结构
+├─ memory/                 # 会话记忆、长期记忆、学习记忆
+├─ state/                  # Redis / task state / queue state
+├─ integrations/           # Java 后端与第三方系统
+├─ observability/          # LangSmith / logging / eval
+├─ schemas/                # 输入输出模型
+└─ services/               # 平台外围服务封装
 ```
 
-### 3.4 当前阶段模块职责
+说明：
 
-#### 1) API 接入层
-
-对外提供同步 REST 接口，例如：
-
-- `POST /agent/chat`
-- `POST /agent/explain`
-- `POST /agent/polish`
-- `POST /agent/translate`
-- `POST /agent/rewrite`
-
-职责：
-
-- 接收 Java 后端请求
-- 参数校验
-- 调用编排层
-- 返回结构化结果
-
-#### 2) Agent 编排层
-
-以 `LangGraph` 为核心。
-
-职责：
-
-- 判断用户意图
-- 选择工具
-- 组合上下文
-- 执行单步或多步流程
-- 统一错误处理与降级
-
-#### 3) Tools Adapter 层
-
-将 `personalenglishai` 已有能力或外部能力包装成工具。
-
-建议工具示例：
-
-- `explain_english_knowledge`
-- `polish_text`
-- `translate_text`
-- `rewrite_text`
-- `build_knowledge_graph`
-
-要求：
-
-- 输入输出结构稳定
-- Agent 不直接访问数据库
-- Agent 不直接耦合业务细节
-
-#### 4) 状态层
-
-使用 `Redis`。
-
-职责：
-
-- `conversation state`
-- `task status`
-- `LangGraph checkpoint`
-- 短期上下文缓存
-- 幂等控制
-- 轻量异步协调
-
-#### 5) 观测层
-
-使用 `LangSmith`。
-
-职责：
-
-- Trace 每次 Agent 运行
-- 记录 prompt / tool / latency / error
-- 支持后续评测和回归分析
+- `platform/` 是平台共性能力，不带英语领域语义
+- `agents/english/` 是英语领域入口
+- `tools/english/` 放英语能力工具
+- `profile/` 单独承载用户理解与能力画像，不混入普通聊天逻辑
+- `memory/` 与 `state/` 分离，前者偏语义记忆，后者偏运行态
 
 ---
 
-## 4. 当前阶段交互方式
+## 6. 三大核心主线
 
-当前阶段采用“双通道设计”，但先落地同步，再补异步。
+### 6.1 Agent 编排主线
 
-### 4.1 同步通道
+职责：
 
-适用场景：
+- 接收请求
+- 决定走哪个 Agent / Tool / Workflow
+- 控制执行顺序
+- 汇总输出
 
-- 英语知识讲解
-- 短文本润色
-- 短文本翻译
-- 简单改写
-- 快速问答
+核心模块：
 
-同步调用时序图：
+- `platform/orchestrator`
+- `platform/router`
+- `platform/runtime`
 
-```mermaid
-sequenceDiagram
-    participant FE as 前端
-    participant JAVA as Java后端
-    participant AGENT as ai-assistant
-    participant GRAPH as LangGraph
-    participant TOOL as Tool
+### 6.2 Tool 能力主线
 
-    FE->>JAVA: 发起讲解/润色/翻译请求
-    JAVA->>AGENT: POST /agent/*
-    AGENT->>GRAPH: 创建运行上下文
-    GRAPH->>TOOL: 调用目标工具
-    TOOL-->>GRAPH: 返回结构化结果
-    GRAPH-->>AGENT: 汇总响应
-    AGENT-->>JAVA: 返回结果
-    JAVA-->>FE: 返回最终响应
-```
+职责：
 
-### 4.2 异步通道
+- 封装英语讲解、翻译、润色、改写、知识图谱等能力
+- 接入 Java 后端或第三方服务
+- 保证输入输出稳定
 
-适用场景：
+核心模块：
 
-- 知识图谱构建
-- 长作文分析
-- 多步复杂工作流
-- 批量任务
-- 需要重试和恢复的任务
+- `tools/english`
+- `tools/shared`
+- `integrations`
 
-异步任务时序图：
+### 6.3 用户理解主线
 
-```mermaid
-sequenceDiagram
-    participant FE as 前端
-    participant JAVA as Java后端
-    participant AGENT as ai-assistant
-    participant REDIS as Redis
-    participant WORKER as Worker
+职责：
 
-    FE->>JAVA: 发起知识图谱/长任务
-    JAVA->>AGENT: 创建异步任务
-    AGENT->>REDIS: 写入 queued 状态
-    AGENT-->>JAVA: 返回 taskId
-    JAVA-->>FE: 返回任务已创建
+- 识别用户当前水平、偏好、目标
+- 提取对话中的学习信号
+- 更新能力画像
+- 为后续回答提供个性化上下文
 
-    WORKER->>REDIS: 拉取任务
-    WORKER->>AGENT: 执行 LangGraph 流程
-    AGENT->>REDIS: 更新 running / success / failed
+核心模块：
 
-    FE->>JAVA: 查询任务状态
-    JAVA->>REDIS: 查询 taskId 状态
-    JAVA-->>FE: 返回结果或进度
-```
+- `profile/extractor`
+- `profile/evaluator`
+- `profile/updater`
+- `memory`
 
 ---
 
-## 5. Redis 与 Kafka 的职责边界
+## 7. 分阶段实施策略
 
-### 5.1 Redis 放在哪里、做什么
+采用“终局按平台设计，落地按阶段推进”的方式。
+
+### Phase 1：平台最小内核
+
+目标：
+
+- 跑通统一 assistant
+- 接入默认模型 Provider
+- 建立平台注册、运行、状态和观测基础
+
+范围：
+
+- `providers`
+- `services`
+- `platform/runtime`
+- `platform/registry`
+- `state`
+- `observability`
+- `POST /assistant/chat`
+
+当前阶段优先默认接入：
+
+- `Kimi`
+
+### Phase 2：英语领域能力闭环
+
+目标：
+
+- 将英语能力正式挂到平台内核上
+- 形成第一个领域闭环
+
+范围：
+
+- `agents/english`
+- `tools/english`
+- explain / translate / polish / rewrite
+- 基础路由
+- 英语领域上下文组织
+
+### Phase 3：用户理解与能力画像
+
+目标：
+
+- 让平台能“理解用户是谁、当前水平如何、薄弱点在哪”
+
+范围：
+
+- `profile/models.py`
+- `profile/extractor`
+- `profile/evaluator`
+- `profile/updater`
+- `memory`
+
+输出示例：
+
+- 学习目标
+- 词汇水平
+- 语法薄弱点
+- 写作问题模式
+- 偏好讲解风格
+
+### Phase 4：复杂工作流与平台增强
+
+目标：
+
+- 支持真正的平台式多步任务与长流程
+
+范围：
+
+- `platform/orchestrator`
+- `platform/planner`
+- 异步任务
+- 知识图谱构建链
+- 长作文分析链
+- 多学科扩展能力
+
+---
+
+## 8. 当前代码迁移策略
+
+当前仓库已经存在：
+
+- `api`
+- `core`
+- `providers`
+- `services`
+- `state`
+- `tools`
+- `observability`
+- `integrations`
+
+迁移原则：
+
+1. 先补平台骨架目录，不立即大范围搬迁现有实现
+2. 先保持现有运行链路稳定
+3. 后续按 Phase 逐步把逻辑迁移到新目录
+4. 避免“目录先重构完、功能全断掉”
+
+因此，当前应理解为：
+
+- 现有代码已是平台早期内核
+- 新目录是未来结构
+- 迁移会分阶段完成，而不是一次性重写
+
+---
+
+## 9. 结论
+
+本项目应按“领域型 Agent 平台”建设，而不是按“单个英语助手”建设。
+
+具体策略是：
+
+- 终局结构采用平台化设计
+- 当前落地采用分阶段推进
+- 先跑通平台最小内核
+- 再接英语领域能力
+- 再接用户理解与能力画像
+- 最后扩到复杂工作流和其他学科
 
 Redis 放在 `ai-assistant` 内核旁边，主要服务编排层和 worker。
 
