@@ -11,6 +11,12 @@ class ConversationState(BaseModel):
     messages: list[ConversationMessage] = Field(default_factory=list)
 
 
+class ConversationPreference(BaseModel):
+    conversation_id: str
+    provider: str
+    model: str
+
+
 class TaskState(BaseModel):
     task_id: str
     status: str

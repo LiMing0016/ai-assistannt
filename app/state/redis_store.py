@@ -2,7 +2,13 @@ import json
 
 from redis import Redis
 
-from app.state.models import ConversationMessage, ConversationState, TaskState
+from app.profile.models import TranslationProfileSnapshot
+from app.state.models import (
+    ConversationMessage,
+    ConversationPreference,
+    ConversationState,
+    TaskState,
+)
 
 
 class RedisStateStore:
@@ -39,6 +45,24 @@ class RedisStateStore:
         messages = [ConversationMessage.model_validate_json(value) for value in values]
         return ConversationState(conversation_id=conversation_id, messages=messages)
 
+    def save_conversation_preference(self, preference: ConversationPreference) -> None:
+        if not self.is_enabled():
+            return
+        key = f"ai-assistant:conversation-preference:{preference.conversation_id}"
+        self._client.set(key, preference.model_dump_json())
+
+    def load_conversation_preference(
+        self,
+        conversation_id: str,
+    ) -> ConversationPreference | None:
+        if not self.is_enabled():
+            return None
+        key = f"ai-assistant:conversation-preference:{conversation_id}"
+        value = self._client.get(key)
+        if not value:
+            return None
+        return ConversationPreference.model_validate(json.loads(value))
+
     def save_task_state(self, task_state: TaskState) -> None:
         if not self.is_enabled():
             return
@@ -53,3 +77,18 @@ class RedisStateStore:
         if not value:
             return None
         return TaskState.model_validate(json.loads(value))
+
+    def save_translation_profile(self, profile: TranslationProfileSnapshot) -> None:
+        if not self.is_enabled():
+            return
+        key = f"ai-assistant:translation-profile:{profile.learner_id}"
+        self._client.set(key, profile.model_dump_json())
+
+    def load_translation_profile(self, learner_id: str) -> TranslationProfileSnapshot | None:
+        if not self.is_enabled():
+            return None
+        key = f"ai-assistant:translation-profile:{learner_id}"
+        value = self._client.get(key)
+        if not value:
+            return None
+        return TranslationProfileSnapshot.model_validate(json.loads(value))

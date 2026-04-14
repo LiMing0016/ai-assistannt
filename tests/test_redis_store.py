@@ -1,4 +1,4 @@
-from app.state.models import ConversationMessage, TaskState
+from app.state.models import ConversationMessage, ConversationPreference, TaskState
 from app.state.redis_store import RedisStateStore
 
 
@@ -50,6 +50,24 @@ def test_redis_store_can_save_and_load_task_state() -> None:
     assert loaded.status == "queued"
 
 
+def test_redis_store_can_save_and_load_conversation_preference() -> None:
+    store = RedisStateStore(redis_url="redis://unused", client=FakeRedis())
+    preference = ConversationPreference(
+        conversation_id="conv-1",
+        provider="openai",
+        model="gpt-5-mini",
+    )
+
+    store.save_conversation_preference(preference)
+
+    loaded = store.load_conversation_preference("conv-1")
+
+    assert loaded is not None
+    assert loaded.conversation_id == "conv-1"
+    assert loaded.provider == "openai"
+    assert loaded.model == "gpt-5-mini"
+
+
 def test_redis_store_allows_disabled_mode_without_client() -> None:
     store = RedisStateStore(redis_url="")
 
@@ -59,4 +77,5 @@ def test_redis_store_allows_disabled_mode_without_client() -> None:
         [ConversationMessage(role="user", content="Hello")],
     )
     assert store.load_conversation_state("conv-1").messages == []
+    assert store.load_conversation_preference("conv-1") is None
     assert store.load_task_state("task-1") is None

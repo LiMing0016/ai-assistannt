@@ -8,10 +8,18 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ProviderUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cached_tokens: int = 0
+
+
 class ProviderResponse(BaseModel):
     provider: str
     model: str
     reply: str
+    usage: ProviderUsage | None = None
 
 
 class ChatProvider(Protocol):
